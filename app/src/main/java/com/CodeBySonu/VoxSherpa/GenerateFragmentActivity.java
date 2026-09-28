@@ -122,6 +122,15 @@ public class GenerateFragmentActivity extends Fragment {
 			}
 		});
 
+		// Blue book button: open a picked EPUB/PDF in the full-screen reader
+		// instead of flattening it into the input box.
+		binding.cardRead.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View _view) {
+				_openReaderPicker();
+			}
+		});
+
 		binding.btnGenerate.setOnClickListener(new View.OnClickListener() {
 			@Override
 			public void onClick(View _view) {
@@ -1060,10 +1069,63 @@ public class GenerateFragmentActivity extends Fragment {
 			}
 		}
 		
+		if (_requestCode == REQ_READER_PICK) {
+			if (_resultCode == android.app.Activity.RESULT_OK && _data != null
+					&& _data.getData() != null) {
+				_openInReader(_data.getData());
+			}
+		}
+
 		switch (_requestCode) {
 			
 		default:
 		break;
+		}
+	}
+
+	/**
+	 * Opens a picked document in the right full-screen reader: EPUB gets the
+	 * WebView reader (native text selection + images), PDF gets rasterised
+	 * pages. Separate from text import so the user can read first.
+	 */
+	private void _openInReader(android.net.Uri uri) {
+		try {
+			int type = _docTypeFor(uri);
+			android.content.Intent i;
+			if (type == com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_PDF) {
+				i = new android.content.Intent();
+				i.setClass(getContext(), com.CodeBySonu.VoxSherpa.PdfReaderActivity.class);
+				i.putExtra(com.CodeBySonu.VoxSherpa.PdfReaderActivity.EXTRA_URI, uri);
+				i.putExtra(com.CodeBySonu.VoxSherpa.PdfReaderActivity.EXTRA_TITLE, _displayName(uri));
+			} else {
+				i = new android.content.Intent();
+				i.setClass(getContext(), com.CodeBySonu.VoxSherpa.EpubReaderActivity.class);
+				i.putExtra(com.CodeBySonu.VoxSherpa.EpubReaderActivity.EXTRA_URI, uri);
+				i.putExtra(com.CodeBySonu.VoxSherpa.EpubReaderActivity.EXTRA_TITLE, _displayName(uri));
+			}
+			i.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+			startActivity(i);
+		} catch (Exception e) {
+			_showImportError("Could not open the reader.");
+		}
+	}
+
+	/**
+	 * Opens the storage manager so the user can see what each model costs and
+	 * delete individually. Upstream's only delete option was a blanket
+	 * "delete all" with no sizes shown.
+	 */
+	private void _openStorageManager() {
+		try {
+			android.content.Intent i = new android.content.Intent();
+			i.setClass(getContext(), com.CodeBySonu.VoxSherpa.StorageActivity.class);
+			startActivity(i);
+		} catch (Exception e) {
+			try {
+				android.widget.Toast.makeText(getContext(),
+						"Storage screen unavailable", android.widget.Toast.LENGTH_SHORT).show();
+			} catch (Throwable ignored) {
+			}
 		}
 	}
 
@@ -1215,6 +1277,47 @@ public class GenerateFragmentActivity extends Fragment {
 		}).start();
 	}
 	
+	/**
+	 * Offers WAV (instant, lossless) or M4B (AAC, smaller, chapter markers).
+	 * M4B encoding takes noticeably longer, so it is opt-in rather than default.
+	 */
+	private void _offerM4bExport(final byte[] pcm, final int sampleRate) {
+		if (pcm == null || pcm.length < 2 || getContext() == null) return;
+		new android.app.AlertDialog.Builder(getContext())
+				.setTitle("Save audiobook?")
+				.setMessage("WAV is already saved.\n\nM4B compresses to AAC (much smaller) and can carry chapter markers, but takes a moment to encode.")
+				.setNeutralButton("Not now", null)
+				.setNegativeButton("Keep WAV only", null)
+				.setPositiveButton("Make M4B", (d, w) -> _runM4bExport(pcm, sampleRate))
+				.show();
+	}
+
+	private void _runM4bExport(final byte[] pcm, final int sampleRate) {
+		if (getContext() == null) return;
+		final android.content.Context ctx = getContext().getApplicationContext();
+		new Thread(() -> {
+			String title = "Vox_";
+			try {
+				java.util.List<M4bExporter.ChapterMark> marks =
+						M4bExporter.marksFromTexts(java.util.Collections.singletonList(""), null, sampleRate);
+				String path = M4bExporter.export(ctx, pcm, sampleRate, title, marks, null);
+				if (getActivity() == null) return;
+				getActivity().runOnUiThread(() -> {
+					if (path == null || path.isEmpty()) {
+						_showImportError("M4B export failed. The WAV is still saved.");
+					} else {
+						android.widget.Toast.makeText(ctx,
+								"Saved: " + path, android.widget.Toast.LENGTH_LONG).show();
+					}
+				});
+			} catch (Exception e) {
+				if (getActivity() == null) return;
+				getActivity().runOnUiThread(() ->
+						_showImportError("M4B export failed. The WAV is still saved."));
+			}
+		}).start();
+	}
+
 	@Override
 	public void onDestroy() {
 		super.onDestroy();
@@ -1348,6 +1451,24 @@ public class GenerateFragmentActivity extends Fragment {
 	}
 	
 	
+	private static final int REQ_READER_PICK = 202;
+
+	/** Opens the picker, then the full-screen reader, for EPUB/PDF. */
+	private void _openReaderPicker() {
+		try {
+			android.content.Intent pick = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+			pick.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+			pick.setType("*/*");
+			pick.putExtra(android.content.Intent.EXTRA_MIME_TYPES, new String[]{
+					"application/epub+zip", "application/pdf", "application/x-ebook"
+			});
+			pick.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+			startActivityForResult(pick, REQ_READER_PICK);
+		} catch (Exception e) {
+			_showImportError("No file picker available.");
+		}
+	}
+
 	/**
 	 * Opens the system document picker, restricted to the formats we can parse.
 	 * Uses ACTION_OPEN_DOCUMENT (not GET_CONTENT) so we get a persistable read grant.
@@ -1428,7 +1549,12 @@ public class GenerateFragmentActivity extends Fragment {
 		
 		String cleanFileName = "Vox_" + System.currentTimeMillis() + ".wav";
 		String savedPath = com.CodeBySonu.VoxSherpa.AudioHelper.saveWavFile(lastGeneratedPcmData, cleanFileName, sampleRateToSave, getContext());
-		
+
+		if (!savedPath.isEmpty()) {
+			// offer the compressed audiobook container alongside the lossless WAV
+			_offerM4bExport(lastGeneratedPcmData, sampleRateToSave);
+		}
+
 		if (!savedPath.isEmpty()) {
 			try {
 				String libraryData = sp2.getString("library_list", "[]");

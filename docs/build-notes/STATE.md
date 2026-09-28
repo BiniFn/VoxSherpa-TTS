@@ -1,8 +1,34 @@
 # VoxSherpa TTS — EPUB build (work log / resume here)
 
-**Status: builds clean. EPUB verified on a real Android runtime. In-app "+" button now opens the picker.**
+**Status: v4.2 built. EPUB reader + PDF reader + Storage manager + M4B export.
+All four compile and are in the APK; all four need on-device verification.**
 
-Last updated: 2026-09-28 21:12
+Last updated: 2026-09-28 21:41
+
+## v4.2 — what was added (all unverified on device)
+
+| Feature | Files | Notes |
+|---|---|---|
+| EPUB full-screen reader | `EpubReaderActivity.java`, `EpubPacker.java`, `EpubReaderSupport.java`, `activity_epub_reader.xml` | WebView per spine chapter → native blue text selection + inline images. Font size buttons, prev/next, per-chapter "speak". JS disabled. |
+| PDF reader | `PdfReaderActivity.java`, `PdfRasterizer.java`, `activity_pdf_reader.xml` | Rasterised pages (as agreed), zoom, page nav, "speak page". **No text selection** — impossible on a rasterised page. |
+| Storage manager | `StorageActivity.java`, `StorageScanner.java`, `activity_storage.xml` | Real on-disk sizes per model, delete individually or all; prunes dead library rows. Wired to the existing STORAGE row in Settings. |
+| M4B export | `M4bExporter.java` | MediaCodec → AAC 64 kbps mono → MediaMuxer → `.m4b`. Offered after the WAV save. |
+
+Entry points: **blue book button** next to "+" opens the picker straight into the
+reader (routes EPUB→reader, PDF→reader); **"+"** still imports text as before.
+
+Design notes:
+- `EpubPacker` unpacks the zip to cache so relative `<img src>` resolves in the
+  WebView; `EpubReaderSupport` holds the OPF/container logic shared with `EpubHelper`
+  so there is one implementation of the spec, not two.
+- zip-slip guard on extraction; doctype/entity expansion disabled (EPUB is untrusted).
+- M4B `presentationUs` advances per queued chunk — a first draft left every buffer at
+  timestamp 0, which produces a file that plays as a click. Also guard against
+  writing a container with no audio track (returns "" and deletes the file).
+
+**Unverified:** all four features compile and their code is confirmed present in the
+shipped dex, but none has been run. The emulator was deleted before v4.2 work started,
+so this needs a device pass.
 
 ## Where things are
 

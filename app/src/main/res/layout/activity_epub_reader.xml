@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0B1120">
+
+    <!-- top bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#131B2D"
+        android:paddingHorizontal="8dp">
+
+        <ImageView
+            android:id="@+id/btn_close"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:padding="11dp"
+            android:src="@drawable/ic_close"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            app:tint="#E2E8F0"
+            xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+        <TextView
+            android:id="@+id/txt_reader_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="6dp"
+            android:textColor="#E2E8F0"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="Reader" />
+
+        <ImageView
+            android:id="@+id/btn_font_smaller"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="10dp"
+            android:src="@drawable/ic_text_decrease"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            app:tint="#94A3B8"
+            xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+        <ImageView
+            android:id="@+id/btn_font_bigger"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="10dp"
+            android:src="@drawable/ic_text_increase"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            app:tint="#94A3B8"
+            xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+        <ImageView
+            android:id="@+id/btn_speak"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="9dp"
+            android:src="@drawable/icon_record_voice"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            app:tint="#1D61FF"
+            xmlns:app="http://schemas.android.com/apk/res-auto" />
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/reader_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:indeterminate="false"
+        android:max="100"
+        android:progress="0"
+        android:progressTint="#1D61FF"
+        android:background="#1E293B" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <WebView
+            android:id="@+id/reader_web"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#0B1120" />
+
+        <TextView
+            android:id="@+id/txt_reader_empty"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:textColor="#64748B"
+            android:textSize="14sp"
+            android:visibility="gone"
+            android:text="No readable text on this page." />
+    </FrameLayout>
+
+    <!-- chapter bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#131B2D"
+        android:paddingHorizontal="10dp">
+
+        <Button
+            android:id="@+id/btn_prev"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:backgroundTint="#1E293B"
+            android:textColor="#CBD5E1"
+            android:textSize="12sp"
+            android:text="‹ Prev" />
+
+        <TextView
+            android:id="@+id/txt_chapter"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:textColor="#64748B"
+            android:textSize="12sp"
+            android:singleLine="true"
+            android:ellipsize="middle"
+            android:text="—" />
+
+        <Button
+            android:id="@+id/btn_next"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:backgroundTint="#1E293B"
+            android:textColor="#CBD5E1"
+            android:textSize="12sp"
+            android:text="Next ›" />
+    </LinearLayout>
+</LinearLayout>

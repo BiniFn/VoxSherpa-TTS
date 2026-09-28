@@ -293,6 +293,22 @@ public class MainActivity extends AppCompatActivity {
 						}
 					} catch (Throwable ignored) {
 					}
+					// hand off to the full-screen reader for the picked document
+					try {
+						android.content.Intent ri = new android.content.Intent();
+						int t = com.CodeBySonu.VoxSherpa.EpubHelper.isEpubMime(mime)
+								? com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_EPUB
+								: com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_PDF;
+						if (t == com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_PDF) {
+							ri.setClass(this, com.CodeBySonu.VoxSherpa.PdfReaderActivity.class);
+							ri.putExtra(com.CodeBySonu.VoxSherpa.PdfReaderActivity.EXTRA_URI, uri);
+						} else {
+							ri.setClass(this, com.CodeBySonu.VoxSherpa.EpubReaderActivity.class);
+							ri.putExtra(com.CodeBySonu.VoxSherpa.EpubReaderActivity.EXTRA_URI, uri);
+						}
+						startActivity(ri);
+					} catch (Throwable ignored) {
+					}
 					android.widget.Toast.makeText(ctx, "Document loaded",
 							android.widget.Toast.LENGTH_SHORT).show();
 				} else {

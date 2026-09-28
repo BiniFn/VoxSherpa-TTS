@@ -77,7 +77,25 @@ public class SettingFragmentActivity extends Fragment {
 		sp3 = getContext().getSharedPreferences("sp3", Activity.MODE_PRIVATE);
 		sp2 = getContext().getSharedPreferences("sp2", Activity.MODE_PRIVATE);
 		sp1 = getContext().getSharedPreferences("sp1", Activity.MODE_PRIVATE);
-		
+
+		// Storage row: opens the storage manager so sizes are visible and models
+		// can be deleted one at a time (upstream only had a blanket delete-all).
+		try {
+			binding.onnxModelRl.setOnClickListener(new View.OnClickListener() {
+				@Override
+				public void onClick(View _view) {
+					try {
+						startActivity(new Intent(getContext(),
+								com.CodeBySonu.VoxSherpa.StorageActivity.class));
+					} catch (Exception e) {
+						android.widget.Toast.makeText(getContext(),
+								"Storage screen unavailable", android.widget.Toast.LENGTH_SHORT).show();
+					}
+				}
+			});
+		} catch (Throwable ignored) {
+		}
+
 		binding.relativelayout24.setOnClickListener(new View.OnClickListener() {
 			@Override
 			public void onClick(View _view) {

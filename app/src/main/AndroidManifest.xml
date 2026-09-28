@@ -121,6 +121,24 @@
 				android:resource="@xml/tts_engine" />
 		</service>  
         
+		<activity
+			android:name=".EpubReaderActivity"
+			android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
+			android:exported="false"
+			android:theme="@style/AppTheme" />
+
+		<activity
+			android:name=".PdfReaderActivity"
+			android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
+			android:exported="false"
+			android:theme="@style/AppTheme" />
+
+		<activity
+			android:name=".StorageActivity"
+			android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
+			android:exported="false"
+			android:theme="@style/AppTheme" />
+
 		<property android:name="android.window.PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE" android:value="true" />
         
 		<activity 
