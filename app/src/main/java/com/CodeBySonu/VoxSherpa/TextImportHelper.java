@@ -22,13 +22,23 @@ public class TextImportHelper {
         void onError(String errorMessage);
     }
 
+    public static final int TYPE_TXT = 0;
+    public static final int TYPE_PDF = 1;
+    public static final int TYPE_EPUB = 2;
+
     public static void _readDocument(Context context, Uri uri, boolean isPdf, TextImportCallback callback) {
+        _readDocument(context, uri, isPdf ? TYPE_PDF : TYPE_TXT, callback);
+    }
+
+    public static void _readDocument(Context context, Uri uri, int docType, TextImportCallback callback) {
         new Thread(() -> {
             try {
                 String resultText;
-                
-                if (isPdf) {
+
+                if (docType == TYPE_PDF) {
                     resultText = _extractTextFromPdf(context, uri);
+                } else if (docType == TYPE_EPUB) {
+                    resultText = EpubHelper.extractText(context, uri, MAX_CHAR_LIMIT);
                 } else {
                     resultText = _extractTextFromTxt(context, uri);
                 }

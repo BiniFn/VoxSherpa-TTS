@@ -223,10 +223,105 @@ public class MainActivity extends AppCompatActivity {
 					}
 				}
 			}
+			// 3. Incoming document (EPUB / PDF) as a file stream, via SEND or VIEW
+			else if (android.content.Intent.ACTION_VIEW.equals(action)
+					|| android.content.Intent.ACTION_SEND.equals(action)) {
+				android.net.Uri incoming = null;
+				if (android.content.Intent.ACTION_SEND.equals(action)) {
+					Object ex = null;
+					try {
+						ex = currentIntent.getParcelableExtra(android.content.Intent.EXTRA_STREAM);
+					} catch (Throwable ignored) {
+					}
+					if (ex instanceof android.net.Uri) {
+						incoming = (android.net.Uri) ex;
+					}
+				} else {
+					incoming = currentIntent.getData();
+				}
+				if (incoming != null) {
+					_handleIncomingDocument(incoming, currentIntent.getType());
+				}
+			}
 			
 			// Intent clear karna taaki screen rotation par text dobara paste na ho
 			currentIntent.setAction(null);
 			setIntent(currentIntent);
+		}
+	}
+
+	/**
+	 * Extracts text from an EPUB/PDF handed to us by another app and drops it
+	 * into the Generate tab input. Runs off the main thread, posts back.
+	 */
+	private void _handleIncomingDocument(final android.net.Uri uri, final String mime) {
+		final android.content.Context ctx = getApplicationContext();
+		final int docType = com.CodeBySonu.VoxSherpa.EpubHelper.isEpubMime(mime)
+				? com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_EPUB
+				: com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_PDF;
+
+		new Thread(() -> {
+			String text = null;
+			try {
+				final android.net.Uri readable = _grantRead(ctx, uri);
+				if (readable != null) {
+					final String[] out = new String[1];
+					final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+					com.CodeBySonu.VoxSherpa.TextImportHelper._readDocument(ctx, readable, docType,
+							new com.CodeBySonu.VoxSherpa.TextImportHelper.TextImportCallback() {
+								@Override
+								public void onSuccess(String t) { out[0] = t; latch.countDown(); }
+								@Override
+								public void onError(String e) { out[0] = null; latch.countDown(); }
+							});
+					latch.await(90, java.util.concurrent.TimeUnit.SECONDS);
+					text = out[0];
+				}
+			} catch (Exception ignored) {
+			}
+
+			final String result = text;
+			runOnUiThread(() -> {
+				if (result != null && !result.trim().isEmpty()) {
+					// sharedProcessText is the existing handoff channel: the Generate
+					// fragment's onStart() drains it into the input box.
+					sharedProcessText = result;
+					try {
+						android.view.View root = findViewById(android.R.id.content);
+						if (root != null) {
+							com.CodeBySonu.VoxSherpa.GenerateFragmentActivity.prefillInput(root, result);
+						}
+					} catch (Throwable ignored) {
+					}
+					android.widget.Toast.makeText(ctx, "Document loaded",
+							android.widget.Toast.LENGTH_SHORT).show();
+				} else {
+					android.widget.Toast.makeText(ctx, "No readable text in that document",
+							android.widget.Toast.LENGTH_SHORT).show();
+				}
+			});
+		}).start();
+	}
+
+	/** Takes a read grant where possible; returns null if the Uri is unreadable. */
+	private static android.net.Uri _grantRead(android.content.Context ctx, android.net.Uri uri) {
+		try {
+			if ("file".equals(uri.getScheme())) {
+				if (new java.io.File(uri.getPath()).canRead()) {
+					return uri;
+				}
+				return null;
+			}
+			try {
+				ctx.getContentResolver().takePersistableUriPermission(uri,
+						android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+			} catch (Exception ignored) {
+			}
+			try (java.io.InputStream in = ctx.getContentResolver().openInputStream(uri)) {
+				return in == null ? null : uri;
+			}
+		} catch (Exception e) {
+			return null;
 		}
 	}
 	

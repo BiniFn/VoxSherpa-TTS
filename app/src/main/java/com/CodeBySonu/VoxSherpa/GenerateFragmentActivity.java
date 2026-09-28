@@ -104,7 +104,24 @@ public class GenerateFragmentActivity extends Fragment {
 		FilePicker.setType("*/*");
 		FilePicker.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
 		spHistory = getContext().getSharedPreferences("spHistory", Activity.MODE_PRIVATE);
-		
+
+		// The "+" card opens the document picker. Upstream v4.0 built the
+		// FilePicker intent and the onActivityResult handler but never attached
+		// a listener, so there was no way to add a file at all.
+		binding.cardAdd.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View _view) {
+				_openDocumentPicker();
+			}
+		});
+		binding.cardAdd.setOnLongClickListener(new View.OnLongClickListener() {
+			@Override
+			public boolean onLongClick(View _view) {
+				_openDocumentPicker();
+				return true;
+			}
+		});
+
 		binding.btnGenerate.setOnClickListener(new View.OnClickListener() {
 			@Override
 			public void onClick(View _view) {
@@ -1017,48 +1034,185 @@ public class GenerateFragmentActivity extends Fragment {
 			}
 		}
 		if (_requestCode == 101) {
-			if (_resultCode == android.app.Activity.RESULT_OK && _data != null && _data.getData() != null) {
-				android.net.Uri fileUri = _data.getData();
-				boolean isPdf = false;
-				String mimeType = getContext().getContentResolver().getType(fileUri);
-				if ("application/pdf".equalsIgnoreCase(mimeType)) {
-					isPdf = true;
-				} else {
-					String path = fileUri.getPath();
-					if (path != null && path.toLowerCase().endsWith(".pdf")) {
-						isPdf = true;
-					}
+			if (_resultCode == android.app.Activity.RESULT_OK && _data != null) {
+				// honour multi-select: the picker is opened with EXTRA_ALLOW_MULTIPLE
+				java.util.ArrayList<android.net.Uri> picked = new java.util.ArrayList<>();
+				java.util.ArrayList<android.net.Uri> multi = null;
+				try {
+					multi = _data.getParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM);
+				} catch (Throwable ignored) {
 				}
-				com.CodeBySonu.VoxSherpa.TextImportHelper._readDocument(getContext(), fileUri, isPdf, new com.CodeBySonu.VoxSherpa.TextImportHelper.TextImportCallback() {
-					@Override
-					public void onSuccess(String text) {
-						if (text != null) {
-							String formattedText = text.trim();
-							if (formattedText.length() > 25000) {
-								formattedText = formattedText.substring(0, 25000);
-							}
-							binding.etInput.setText(formattedText);
-							binding.etInput.setSelection(formattedText.length());
-						}
-					}
-					@Override
-					public void onError(String errorMessage) {
-						if (getView() != null) {
-							com.google.android.material.snackbar.Snackbar.make(getView(), errorMessage, com.google.android.material.snackbar.Snackbar.LENGTH_SHORT)
-							.setBackgroundTint(android.graphics.Color.parseColor("#FF4B4B"))
-							.setTextColor(android.graphics.Color.WHITE)
-							.show();
-						}
-					}
-				});
+				if (multi != null) {
+					picked.addAll(multi);
+				} else if (_data.getData() != null) {
+					picked.add(_data.getData());
+				}
+
+				if (picked.isEmpty()) {
+					_showImportError("No file selected.");
+					return;
+				}
+				if (picked.size() == 1) {
+					_importDocument(picked.get(0));
+				} else {
+					_importDocuments(picked);
+				}
 			}
 		}
 		
 		switch (_requestCode) {
 			
-			default:
-			break;
+		default:
+		break;
 		}
+	}
+
+	/** Snackbar helper, safe when the fragment view is gone. */
+	private void _showImportError(String message) {
+		if (getView() == null) return;
+		try {
+			com.google.android.material.snackbar.Snackbar
+					.make(getView(), message, com.google.android.material.snackbar.Snackbar.LENGTH_SHORT)
+					.setBackgroundTint(android.graphics.Color.parseColor("#FF4B4B"))
+					.setTextColor(android.graphics.Color.WHITE)
+					.show();
+		} catch (Throwable ignored) {
+		}
+	}
+
+	/** Resolves the real MIME/extension for a picked Uri, then parses it. */
+	private int _docTypeFor(android.net.Uri fileUri) {
+		String mimeType = null;
+		try {
+			mimeType = getContext().getContentResolver().getType(fileUri);
+		} catch (Exception ignored) {
+		}
+		if (com.CodeBySonu.VoxSherpa.EpubHelper.isEpubMime(mimeType)) {
+			return com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_EPUB;
+		}
+		if ("application/pdf".equalsIgnoreCase(mimeType)) {
+			return com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_PDF;
+		}
+		String fileName = _displayName(fileUri);
+		if (com.CodeBySonu.VoxSherpa.EpubHelper.isEpubName(fileName)) {
+			return com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_EPUB;
+		}
+		if (fileName != null && fileName.toLowerCase().endsWith(".pdf")) {
+			return com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_PDF;
+		}
+		String path = fileUri.getPath();
+		if (path != null) {
+			if (path.toLowerCase().endsWith(".epub")) {
+				return com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_EPUB;
+			}
+			if (path.toLowerCase().endsWith(".pdf")) {
+				return com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_PDF;
+			}
+		}
+		return com.CodeBySonu.VoxSherpa.TextImportHelper.TYPE_TXT;
+	}
+
+	private String _displayName(android.net.Uri fileUri) {
+		try (android.database.Cursor c = getContext().getContentResolver()
+				.query(fileUri, null, null, null, null)) {
+			if (c != null && c.moveToFirst()) {
+				int idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+				if (idx >= 0) {
+					String n = c.getString(idx);
+					if (n != null) return n;
+				}
+			}
+		} catch (Exception ignored) {
+		}
+		String p = fileUri.getLastPathSegment();
+		return p == null ? "" : p;
+	}
+
+	private void _importDocument(android.net.Uri fileUri) {
+		// keep the grant alive so a re-read later still works
+		try {
+			getContext().getContentResolver().takePersistableUriPermission(fileUri,
+					android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+		} catch (Exception ignored) {
+		}
+		int docType = _docTypeFor(fileUri);
+		com.CodeBySonu.VoxSherpa.TextImportHelper._readDocument(getContext(), fileUri, docType,
+				new com.CodeBySonu.VoxSherpa.TextImportHelper.TextImportCallback() {
+					@Override
+					public void onSuccess(String text) {
+						if (text != null && getView() != null) {
+							String formatted = text.trim();
+							if (formatted.length() > 25000) {
+								formatted = formatted.substring(0, 25000);
+							}
+							binding.etInput.setText(formatted);
+							binding.etInput.setSelection(formatted.length());
+						}
+					}
+					@Override
+					public void onError(String errorMessage) {
+						_showImportError(errorMessage);
+					}
+				});
+	}
+
+	/** Concatenates several picked documents in the order chosen, up to the cap. */
+	private void _importDocuments(final java.util.List<android.net.Uri> uris) {
+		final StringBuilder merged = new StringBuilder();
+		final java.util.concurrent.atomic.AtomicInteger pending =
+				new java.util.concurrent.atomic.AtomicInteger(uris.size());
+		final java.util.concurrent.CountDownLatch latch =
+				new java.util.concurrent.CountDownLatch(uris.size());
+
+		for (android.net.Uri u : uris) {
+			try {
+				getContext().getContentResolver().takePersistableUriPermission(u,
+						android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+			} catch (Exception ignored) {
+			}
+			final android.net.Uri fileUri = u;
+			com.CodeBySonu.VoxSherpa.TextImportHelper._readDocument(getContext(), fileUri,
+					_docTypeFor(fileUri),
+					new com.CodeBySonu.VoxSherpa.TextImportHelper.TextImportCallback() {
+						@Override
+						public void onSuccess(String text) {
+							synchronized (merged) {
+								if (text != null && merged.length() < 25000) {
+									if (merged.length() > 0) merged.append("\n\n");
+									merged.append(text.trim());
+									if (merged.length() > 25000) {
+										merged.setLength(25000);
+									}
+								}
+							}
+							pending.decrementAndGet();
+							latch.countDown();
+						}
+						@Override
+						public void onError(String errorMessage) {
+							pending.decrementAndGet();
+							latch.countDown();
+						}
+					});
+		}
+
+		new Thread(() -> {
+			try {
+				latch.await(120, java.util.concurrent.TimeUnit.SECONDS);
+			} catch (InterruptedException ignored) {
+			}
+			final String all = merged.toString();
+			if (getActivity() == null) return;
+			getActivity().runOnUiThread(() -> {
+				if (all.trim().isEmpty()) {
+					_showImportError("Could not read the selected file(s).");
+					return;
+				}
+				if (getView() == null) return;
+				binding.etInput.setText(all);
+				binding.etInput.setSelection(all.length());
+			});
+		}).start();
 	}
 	
 	@Override
@@ -1194,6 +1348,49 @@ public class GenerateFragmentActivity extends Fragment {
 	}
 	
 	
+	/**
+	 * Opens the system document picker, restricted to the formats we can parse.
+	 * Uses ACTION_OPEN_DOCUMENT (not GET_CONTENT) so we get a persistable read grant.
+	 */
+	private void _openDocumentPicker() {
+		try {
+			android.content.Intent pick = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+			pick.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+			pick.setType("*/*");
+			// Some providers ignore a wildcard type, so declare the real ones too.
+			pick.putExtra(android.content.Intent.EXTRA_MIME_TYPES, new String[]{
+					"application/epub+zip",
+					"application/pdf",
+					"text/plain",
+					"text/*",
+					"application/x-ebook",
+					"application/octet-stream"
+			});
+			pick.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+			pick.addFlags(android.content.Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+			startActivityForResult(pick, 101);
+		} catch (Exception e) {
+			try {
+				android.widget.Toast.makeText(getContext(),
+						"No file picker available", android.widget.Toast.LENGTH_SHORT).show();
+			} catch (Throwable ignored) {
+			}
+		}
+	}
+
+	/**
+	 * Drops extracted document text straight into the Generate input box.
+	 * Public static so MainActivity can hand off a file it parsed itself.
+	 */
+	public static void prefillInput(android.view.View root, String text) {
+		if (root == null || text == null) return;
+		android.widget.EditText box = root.findViewById(R.id.et_input);
+		if (box != null) {
+			box.setText(text);
+			box.setSelection(text.length());
+		}
+	}
+
 	@Override
 	public void onStart() {
 		super.onStart();
@@ -1204,7 +1401,7 @@ public class GenerateFragmentActivity extends Fragment {
 				if (mainActivity.sharedProcessText != null && !mainActivity.sharedProcessText.isEmpty()) {
 					binding.etInput.setText(mainActivity.sharedProcessText);
 					binding.etInput.setSelection(mainActivity.sharedProcessText.length());
-					mainActivity.sharedProcessText = ""; 
+					mainActivity.sharedProcessText = "";
 				}
 			}
 		} catch (Exception e) {

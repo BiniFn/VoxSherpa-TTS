@@ -8,3 +8,12 @@
 .externalNativeBuild
 .cxx
 app/build/
+
+# Local build outputs — never commit binaries to git history.
+# APKs are published as release assets instead.
+/*.apk
+/venv/
+
+# Local machine paths / scratch
+/_hermes*
+*.hprof
